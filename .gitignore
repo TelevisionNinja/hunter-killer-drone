@@ -54,3 +54,4 @@ CATKIN_IGNORE
 /workspace/build/
 /workspace/install/
 /workspace/log/
+yolov8m.pt
