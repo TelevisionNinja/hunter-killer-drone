@@ -37,6 +37,12 @@ def generate_launch_description():
             name='visualizer'
         ),
         Node(
+            package='hunter_killer_drone',
+            namespace='hunter_killer_drone',
+            executable='vision',
+            name='vision'
+        ),
+        Node(
             package='rviz2',
             namespace='',
             executable='rviz2',
