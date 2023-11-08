@@ -47,3 +47,11 @@ cmake ..
 make
 sudo make install
 sudo ldconfig /usr/local/lib/
+
+# OpenCV
+
+pip3 install opencv-python
+
+# Ultralytics YOLOv8
+
+pip install ultralytics
