@@ -28,7 +28,8 @@ setup(
                 'visualizer = hunter_killer_drone.visualizer:main',
                 'offboard_control = hunter_killer_drone.offboard_control:main',
                 'control = hunter_killer_drone.control:main',
-                'processes = hunter_killer_drone.processes:main'
+                'processes = hunter_killer_drone.processes:main',
+                'vision = hunter_killer_drone.vision:main'
         ],
     },
 )
