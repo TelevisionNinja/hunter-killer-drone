@@ -2,7 +2,7 @@ sudo apt install git
 sudo apt install make
 sudo apt install curl
 
-# px4
+# PX4
 
 cd ~
 
@@ -11,7 +11,7 @@ bash ./PX4-Autopilot/Tools/setup/ubuntu.sh
 cd PX4-Autopilot/
 make px4_sitl
 
-# ros
+# ROS2 Humble
 
 cd ~
 
@@ -55,3 +55,7 @@ pip3 install opencv-python
 # Ultralytics YOLOv8
 
 pip install ultralytics
+
+# ros_gz ROS2 Humble Gazebo Garden
+
+sudo apt install ros-humble-ros-gzgarden
