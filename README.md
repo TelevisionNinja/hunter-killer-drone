@@ -6,3 +6,4 @@ Dependencies
 - PX4
 - Micro XRCE-DDS Agent
 - OpenCV
+- Ultralytics YOLOv8
