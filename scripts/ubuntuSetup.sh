@@ -33,6 +33,8 @@ sudo apt upgrade
 sudo apt install ros-humble-desktop
 sudo apt install ros-dev-tools
 
+pip install --user -U empy pyros-genmsg setuptools
+
 # Micro XRCE-DDS Agent
 
 cd ~
