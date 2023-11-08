@@ -38,7 +38,7 @@ def generate_launch_description():
         ),
         Node(
             package='hunter_killer_drone',
-            namespace='hunter_killer_drone',
+            namespace='',
             executable='vision',
             name='vision'
         ),
