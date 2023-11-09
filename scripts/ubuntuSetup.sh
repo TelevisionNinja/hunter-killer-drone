@@ -59,3 +59,18 @@ pip install ultralytics
 # ros_gz ROS2 Humble Gazebo Garden
 
 sudo apt install ros-humble-ros-gzgarden
+
+# QGroundControl
+
+cd ~
+mkdir QGroundControl
+
+sudo usermod -a -G dialout $USER
+sudo apt-get remove modemmanager -y
+sudo apt install gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl -y
+sudo apt install libqt5gui5 -y
+sudo apt install libfuse2 -y
+
+cd ./QGroundControl
+curl https://d176tv9ibo4jno.cloudfront.net/latest/QGroundControl.AppImage --output QGroundControl.AppImage
+chmod +x ./QGroundControl.AppImage
