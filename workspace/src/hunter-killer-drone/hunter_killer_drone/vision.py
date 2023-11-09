@@ -33,7 +33,7 @@ class ImageSubscriber(Node):
         current_frame = self.cvbridge.imgmsg_to_cv2(data, desired_encoding="bgr8")
 
         # Object Detection
-        results = model.predict(current_frame, classes=[0, 2])
+        results = model.predict(current_frame, classes=[0]) # 0: people, 2: cars
         image = results[0].plot()
 
         # Show Results
