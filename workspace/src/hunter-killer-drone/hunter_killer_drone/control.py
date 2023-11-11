@@ -17,11 +17,12 @@ else:
 
 
 commands = """
-This node takes keypresses from the keyboard and publishes them as Twist messages.
-W: Up
-S: Down
+W: Pitch Forward
+S: Pitch Backward
 A: Yaw Left
 D: Yaw Right
+Q: Up
+E: Down
 
 Up Arrow: Pitch Forward
 Down Arrow: Pitch Backward
@@ -29,17 +30,20 @@ Left Arrow: Roll Left
 Right Arrow: Roll Right
 
 SPACE: Arm/disarm the drone
+R: Enable AI tracking
 """
 
 moveBindings = {
-    'w': (0, 0, 1, 0), # Z+
-    's': (0, 0, -1, 0),# Z-
-    'a': (0, 0, 0, -1), # Yaw+
-    'd': (0, 0, 0, 1),# Yaw-
-    '\x1b[A' : (0, 1, 0, 0),  # Up Arrow
-    '\x1b[B' : (0, -1, 0, 0), # Down Arrow
-    '\x1b[C' : (-1, 0, 0, 0), # Right Arrow
-    '\x1b[D' : (1, 0, 0, 0),  # Left Arrow
+    'w': (0, 0, 0, 0, 1), # Pitch+
+    's': (0, 0, 0, 0, -1), # Pitch-
+    'a': (0, 0, 0, -1, 0), # Yaw+
+    'd': (0, 0, 0, 1, 0), # Yaw-
+    '\x1b[A': (0, 1, 0, 0, 0),  # Up Arrow Y+
+    '\x1b[B': (0, -1, 0, 0, 0), # Down Arrow Y-
+    '\x1b[C': (-1, 0, 0, 0, 0), # Right Arrow X-
+    '\x1b[D': (1, 0, 0, 0, 0),  # Left Arrow X+
+    'q': (0, 0, 1, 0, 0), # Z+
+    'e': (0, 0, -1, 0, 0), # Z-
 }
 
 
@@ -84,65 +88,89 @@ def main():
         depth=10
     )
 
-    pub = node.create_publisher(geometry_msgs.msg.Twist, '/offboard_velocity_cmd', qos_profile)
+    offboard_publisher = node.create_publisher(
+        geometry_msgs.msg.Twist,
+        '/offboard_velocity_cmd',
+        qos_profile
+    )
 
     arm_toggle = False
-    arm_pub = node.create_publisher(std_msgs.msg.Bool, '/arm_message', qos_profile)
+    arm_msg_publisher = node.create_publisher(
+        std_msgs.msg.Bool,
+        '/arm_message',
+        qos_profile
+    )
 
-    speed = 1.0
-    turn = .2
-    x = 0.0
-    y = 0.0
-    z = 0.0
-    th = 0.0
+    vision_enabled = False
+    offboard_vision_publisher = node.create_publisher(
+        std_msgs.msg.Bool,
+        '/vision_enabled',
+        qos_profile
+    )
+
+    speed_increment = 1.0
+    turn_increment = 0.16
     x_val = 0.0
     y_val = 0.0
     z_val = 0.0
+    pitch_val = 0.0
     yaw_val = 0.0
-
-    print(commands)
 
     try:
         while True:
+            print(commands)
+
             key = getKey(settings)
 
-            if key in moveBindings.keys():
-                x = moveBindings[key][0]
-                y = moveBindings[key][1]
-                z = moveBindings[key][2]
-                th = moveBindings[key][3]
+            x_change = 0.0
+            y_change = 0.0
+            z_change = 0.0
+            yaw_change = 0.0
+            pitch_change = 0.0
 
-            else:
-                x = 0.0
-                y = 0.0
-                z = 0.0
-                th = 0.0
-                if key == '\x03':
-                    break
+            if key == '\x03':
+                break
+            elif key in moveBindings.keys():
+                values = moveBindings[key]
+                x_change = values[0]
+                y_change = values[1]
+                z_change = values[2]
+                yaw_change = values[3]
+                pitch_change = values[4]
 
-            if key == ' ':
+                x_val += x_change * speed_increment
+                y_val += y_change * speed_increment
+                z_val += z_change * speed_increment
+                yaw_val += yaw_change * turn_increment
+                pitch_val += pitch_change * turn_increment
+
+                twist = geometry_msgs.msg.Twist()
+                twist.linear.x = x_val
+                twist.linear.y = y_val
+                twist.linear.z = z_val
+                twist.angular.x = pitch_val
+                twist.angular.y = 0.0
+                twist.angular.z = yaw_val
+                offboard_publisher.publish(twist)
+
+                print("Yaw:", twist.angular.z,
+                      "\tPitch:", twist.angular.x,
+                      "\tRoll:", twist.angular.y,
+                      "\tX Speed (side to side):", twist.linear.x,
+                      "\tY Speed (forward & backward):", twist.linear.y,
+                      "\tZ Speed (up & down):", twist.linear.z)
+            elif key == ' ':
                 arm_toggle = not arm_toggle
                 arm_msg = std_msgs.msg.Bool()
                 arm_msg.data = arm_toggle
-                arm_pub.publish(arm_msg)
+                arm_msg_publisher.publish(arm_msg)
                 print(f"Arm toggle is now: {arm_toggle}")
-
-            twist = geometry_msgs.msg.Twist()
-            
-            x_val = x * speed + x_val
-            y_val = y * speed + y_val
-            z_val = z * speed + z_val
-            yaw_val = th * turn + yaw_val
-            twist.linear.x = x_val
-            twist.linear.y = y_val
-            twist.linear.z = z_val
-            twist.angular.x = 0.0
-            twist.angular.y = 0.0
-            twist.angular.z = yaw_val
-            pub.publish(twist)
-
-            print(commands)
-            print("X:", twist.linear.x, "\tY:", twist.linear.y, "\tZ:", twist.linear.z, "\tYaw:", twist.angular.z)
+            elif key == 'r':
+                vision_enabled = not vision_enabled
+                vision_msg = std_msgs.msg.Bool()
+                vision_msg.data = vision_enabled
+                offboard_vision_publisher.publish(vision_msg)
+                print(f"AI mode: {vision_enabled}")
 
     except Exception as e:
         print(e)
@@ -155,7 +183,7 @@ def main():
         twist.angular.x = 0.0
         twist.angular.y = 0.0
         twist.angular.z = 0.0
-        pub.publish(twist)
+        offboard_publisher.publish(twist)
 
         restoreTerminalSettings(settings)
 
