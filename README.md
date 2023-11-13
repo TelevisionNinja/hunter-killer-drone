@@ -39,14 +39,17 @@ Launch the simulation
 
 ## Controls
 
-W: Up<br/>
-S: Down<br/>
+W: Pitch Forward<br/>
+S: Pitch Backward<br/>
 A: Yaw Left<br/>
 D: Yaw Right<br/>
+Q: Up<br/>
+E: Down<br/>
 
 Up Arrow: Pitch Forward<br/>
 Down Arrow: Pitch Backward<br/>
 Left Arrow: Roll Left<br/>
 Right Arrow: Roll Right<br/>
 
-SPACE: Arm/disarm the drone
+SPACE: Arm/disarm the drone<br/>
+R: Enable AI tracking
