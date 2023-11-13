@@ -6,7 +6,8 @@ import cv2
 from ultralytics import YOLO
 import math
 import geometry_msgs.msg
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+import numpy
 
 model = YOLO('yolov8m.pt')
 
@@ -15,19 +16,25 @@ class ImageSubscriber(Node):
     def __init__(self):
         super().__init__('image_subscriber')
 
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+
         # receive an Image from the camera topic
         self.camera_subscription = self.create_subscription(
             Image,
             'camera',
-            self.listener_callback,
-            10
+            self.camera_callback,
+            qos_profile
         )
 
-        qos_profile = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=10
+        self.camera_subscription = self.create_subscription(
+            Image,
+            'depth_camera',
+            self.depth_camera_callback,
+            qos_profile
         )
 
         self.offboard_vision_publisher = self.create_publisher(
@@ -38,11 +45,18 @@ class ImageSubscriber(Node):
 
         # convert between ROS and OpenCV images
         self.cvbridge = CvBridge()
+        self.current_depth_image = None
 
 
-    def listener_callback(self, data):
-        # Display the message on the console
-        # self.get_logger().info('Receiving video frame')
+    def camera_callback(self, data):
+        """
+        gazebo settings
+        depth camera: oak d lite 
+        clip min: 0.1, max: 100
+        horizontal fov: 1.204
+        fps: 30
+        resolution: 1920 X 1080
+        """
 
         # Convert ROS Image message to OpenCV image
         current_frame = self.cvbridge.imgmsg_to_cv2(data, desired_encoding="bgr8")
@@ -61,9 +75,11 @@ class ImageSubscriber(Node):
         twist.angular.z = 0.0
 
         if len(results) > 0:
+            image = results[0].plot()
+
             if len(results[0].boxes) > 0:
                 # computer graphics coordinate grid (origin at the top left, positive y axis goes down)
-                img_width_y, img_height_x = results[0].orig_shape
+                img_height_y, img_width_x = results[0].orig_shape
                 bounding_box = results[0].boxes[0].xyxy[0]
                 # tracking_id = results[0].boxes[0].id
                 x1 = bounding_box[0]
@@ -75,10 +91,10 @@ class ImageSubscriber(Node):
                 box_midpoint_y = (y2 + y1) / 2
 
                 midpoint_offset_x = 0
-                midpoint_offset_y = img_width_y / 8
+                midpoint_offset_y = img_height_y / 16
 
-                img_midpoint_x = img_height_x / 2 + midpoint_offset_x
-                img_midpoint_y = img_width_y / 2 + midpoint_offset_y
+                img_midpoint_x = img_width_x / 2 + midpoint_offset_x
+                img_midpoint_y = img_height_y / 2 + midpoint_offset_y
 
                 length_x = img_midpoint_x - box_midpoint_x # pixels
                 length_y = img_midpoint_y - box_midpoint_y # pixels
@@ -91,13 +107,103 @@ class ImageSubscriber(Node):
                 twist.angular.x = theta_y
                 twist.angular.z = theta_x
 
-            image = results[0].plot()
+                thickness = 3
+
+                image = cv2.circle(
+                    image,
+                    center=(int(box_midpoint_x), int(box_midpoint_y)),
+                    radius=thickness,
+                    color=(0, 0, 255), # b,g,r
+                    thickness=-1
+                )
+
+                # vertical line
+                image = cv2.line(
+                    image,
+                    pt1=(int(img_midpoint_x), 0),
+                    pt2=(int(img_midpoint_x), int(img_height_y)),
+                    color=(0, 255, 0), # b,g,r
+                    thickness=thickness
+                )
+
+                # horizontal line
+                image = cv2.line(
+                    image,
+                    pt1=(0, int(img_midpoint_y)),
+                    pt2=(int(img_width_x), int(img_midpoint_y)),
+                    color=(0, 255, 0), # b,g,r
+                    thickness=thickness
+                )
 
             # Show Results
             cv2.imshow('Detected Frame', image)
             cv2.waitKey(1)
 
         self.offboard_vision_publisher.publish(twist)
+
+
+    def depth_camera_callback(self, data):
+        """
+        gazebo settings
+        depth camera: oak d lite 
+        clip min: 0.2, max: 19.1
+        horizontal fov: 1.274
+        fps: 30
+        resolution: 640 X 480
+        """
+
+        current_frame = self.cvbridge.imgmsg_to_cv2(data, desired_encoding='passthrough') # 32FC1, 32F: float 32, C1: 1 channel
+        depth_array = numpy.array(current_frame, dtype=numpy.float32)
+
+        #----------------------------------------------------
+
+        # replace float infinity with the non infinity maximum value
+        depth_array[depth_array == numpy.inf] = -1
+        max = depth_array.max()
+        depth_array[depth_array == -1] = max
+
+        # replace float -infinity with the non infinity minimum value
+        depth_array[depth_array == -numpy.inf] = max + 1
+        min = depth_array.min()
+        depth_array[depth_array == max + 1] = min
+
+        #----------------------------------------------------
+
+        height = len(depth_array)
+        width = len(depth_array[0])
+
+        #----------------------------------------------------
+
+        # resize
+        original_fov = 1.274
+        target_fov = 1.204
+        scale_factor = original_fov / target_fov * 0.975 # 97.5% of the ratio. 100% was a little too much
+        depth_array = cv2.resize(depth_array, None, fx=scale_factor, fy=scale_factor)
+
+        #----------------------------------------------------
+
+        # change aspect ratio by cutting image
+        aspect_ratio_x = 16
+        aspect_ratio_y = 9
+        new_height = width * aspect_ratio_y / aspect_ratio_x
+        starting_height = (height - new_height) / 2
+        depth_array = depth_array[int(starting_height):int(starting_height + new_height), 0:width]
+
+        #----------------------------------------------------
+
+        # update the saved depth image for tracking calculations
+        self.current_depth_image = depth_array
+
+        #----------------------------------------------------
+
+        # normalize for visualization
+        current_frame = (depth_array - min) * 255 / (max - min)
+        current_frame = numpy.round(current_frame)
+        current_frame = current_frame.astype(numpy.uint8)
+
+        # Show Results
+        cv2.imshow('Depth Frame', current_frame)
+        cv2.waitKey(1)
 
 
 def main(args=None):
