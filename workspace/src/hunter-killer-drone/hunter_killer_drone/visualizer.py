@@ -34,7 +34,7 @@ class PX4Visualizer(Node):
         qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
-            depth=1,
+            depth=1
         )
 
         self.attitude_sub = self.create_subscription(
