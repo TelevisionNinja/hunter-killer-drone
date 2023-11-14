@@ -56,6 +56,11 @@ class ImageSubscriber(Node):
         horizontal fov: 1.204
         fps: 30
         resolution: 1920 X 1080
+
+        sensor: IMX214
+        effective_focal_length: 3.37 mm
+        pixel_size: 1.12 um
+        resolution: 13MP (4208x3120)
         """
 
         # Convert ROS Image message to OpenCV image
@@ -99,13 +104,30 @@ class ImageSubscriber(Node):
                 length_x = img_midpoint_x - box_midpoint_x # pixels
                 length_y = img_midpoint_y - box_midpoint_y # pixels
 
-                depth = 20 # meters
+                effective_focal_length = 3.37 # mm
+                width = 4208 # pixels
+                pixel_size = width * 1.12 / (1920 * 1000) # um to mm
 
-                theta_x = math.atan(length_x / depth)
-                theta_y = math.atan(length_y / depth)
+                theta_x = math.atan(length_x * pixel_size / effective_focal_length) # rad
+                # theta_y = math.atan(length_y * pixel_size / effective_focal_length) # rad
+                # twist.angular.x = theta_y
 
-                twist.angular.x = theta_y
+                #----------------------------------------------------
+
+                # take the median depth value
+                point_1_y = int(y1 / img_height_y * len(self.current_depth_image))
+                point_1_x = int(x1 / img_width_x * len(self.current_depth_image[0]))
+                point_2_y = int(y2 / img_height_y * len(self.current_depth_image))
+                point_2_x = int(x2 / img_width_x * len(self.current_depth_image[0]))
+                depth = numpy.median(self.current_depth_image[point_1_y:point_2_y, point_1_x:point_2_x]) # meters
+                delta_height = -length_y * pixel_size * depth / effective_focal_length # meters
+
+                #----------------------------------------------------
+
+                twist.linear.z = float(delta_height)
                 twist.angular.z = theta_x
+
+                #----------------------------------------------------
 
                 thickness = 3
 
@@ -150,6 +172,11 @@ class ImageSubscriber(Node):
         horizontal fov: 1.274
         fps: 30
         resolution: 640 X 480
+
+        sensor: OV7251
+        effective_focal_length: 1.3 mm
+        pixel_size: 3 um
+        resolution: 480P (640x480)
         """
 
         current_frame = self.cvbridge.imgmsg_to_cv2(data, desired_encoding='passthrough') # 32FC1, 32F: float 32, C1: 1 channel

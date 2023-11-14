@@ -6,7 +6,7 @@ import math
 import rclpy
 from rclpy.node import Node
 from rclpy.clock import Clock
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleStatus, VehicleAttitude, VehicleCommand
 from geometry_msgs.msg import Twist, Vector3
@@ -16,9 +16,9 @@ from std_msgs.msg import Bool
 class OffboardControl(Node):
     def __init__(self):
         super().__init__('minimal_publisher')
+
         qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL,
             history=HistoryPolicy.KEEP_LAST,
             depth=1
         )
@@ -264,24 +264,58 @@ class OffboardControl(Node):
     def vision_enable_callback(self, msg):
         self.vision_enabled = msg.data
 
-        if not self.vision_enabled:
-            self.yaw = 0.0
-            self.pitch = 0.0
-
 
     def vision_control_callback(self, msg):
         if self.vision_enabled:
             # NED -> FLU Transformation
-            self.yaw = -msg.angular.z
-            self.pitch = -msg.angular.x
+            yaw = -msg.angular.z
+            # pitch = msg.angular.x
+            delta_height = msg.linear.z
 
-            # reduce rad/s
-            self.yaw = -msg.angular.z / 4
+            timestamp = int(Clock().now().nanoseconds / 1000)
+
+            # Publish offboard control modes
+            offboard_msg = OffboardControlMode()
+            offboard_msg.timestamp = timestamp
+            offboard_msg.position = False
+            offboard_msg.velocity = True
+            offboard_msg.acceleration = False
+            offboard_msg.attitude = False
+            offboard_msg.body_rate = False
+            offboard_msg.actuator = False
+
+            self.publisher_offboard_mode.publish(offboard_msg)
+
+            # Compute velocity in the world frame
+            cos_yaw = numpy.cos(self.trueYaw)
+            sin_yaw = numpy.sin(self.trueYaw)
+            velocity_world_x = (self.velocity.x * cos_yaw - self.velocity.y * sin_yaw)
+            velocity_world_y = (self.velocity.x * sin_yaw + self.velocity.y * cos_yaw)
+
+            # Create and publish TrajectorySetpoint message with NaN values for position and acceleration
+            trajectory_msg = TrajectorySetpoint()
+            trajectory_msg.timestamp = timestamp
+
+            # NED local world frame
+            trajectory_msg.velocity[0] = velocity_world_x # in meters/second
+            trajectory_msg.velocity[1] = velocity_world_y # in meters/second
+            trajectory_msg.velocity[2] = self.velocity.z + delta_height # in meters/second
+            trajectory_msg.position[0] = float('nan') # in meters
+            trajectory_msg.position[1] = float('nan') # in meters
+            trajectory_msg.position[2] = float('nan') # in meters
+            trajectory_msg.acceleration[0] = float('nan') # in meters/second^2
+            trajectory_msg.acceleration[1] = float('nan') # in meters/second^2
+            trajectory_msg.acceleration[2] = float('nan') # in meters/second^2
+
+            trajectory_msg.yaw = float('nan') # euler angle of desired attitude in radians -PI..+PI
+            trajectory_msg.yawspeed = yaw # angular velocity around NED frame z-axis in radians/second
+
+            self.publisher_trajectory.publish(trajectory_msg)
 
 
     # publishes offboard control modes and velocity as trajectory setpoints
     def cmdloop_callback(self):
-        if self.offboardMode == True:
+        if self.offboardMode == True and not self.vision_enabled:
             timestamp = int(Clock().now().nanoseconds / 1000)
 
             # Publish offboard control modes
@@ -310,9 +344,9 @@ class OffboardControl(Node):
             trajectory_msg.velocity[0] = velocity_world_x # in meters/second
             trajectory_msg.velocity[1] = velocity_world_y # in meters/second
 
-            # pitch is [-pi/2, pi/2], thus / by pi/2
-            # max velocity = 4 m/s
-            trajectory_msg.velocity[2] = self.velocity.z + 4 * (self.pitch) * 2 / math.pi # in meters/second
+            # pitch is [-pi/2, pi/2], thus / by pi/2 to convert to [-1, 1]
+            # max velocity = 4.5 m/s
+            trajectory_msg.velocity[2] = self.velocity.z + 4.5 * self.pitch * 2 / math.pi # in meters/second
 
             trajectory_msg.position[0] = float('nan') # in meters
             trajectory_msg.position[1] = float('nan') # in meters
