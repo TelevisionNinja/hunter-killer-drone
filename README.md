@@ -9,6 +9,14 @@ Dependencies
 - Ultralytics YOLOv8
 - ros_gz
 
+## Results
+### Depth Camera
+![depth](./images/depth_frame.png)
+### Camera
+![detect](./images/detected_frame.png)
+### RViz Path Visualizaiton
+![rviz](./images/rviz.png)
+
 ## Installation
 
 Clone the repo
@@ -39,17 +47,17 @@ Launch the simulation
 
 ## Controls
 
-W: Pitch Forward<br/>
-S: Pitch Backward<br/>
+W: Pitch Up<br/>
+S: Pitch Down<br/>
 A: Yaw Left<br/>
 D: Yaw Right<br/>
 Q: Up<br/>
 E: Down<br/>
 
-Up Arrow: Pitch Forward<br/>
-Down Arrow: Pitch Backward<br/>
-Left Arrow: Roll Left<br/>
-Right Arrow: Roll Right<br/>
+Up Arrow: Move Forward<br/>
+Down Arrow: Move Backward<br/>
+Left Arrow: Move Left<br/>
+Right Arrow: Move Right<br/>
 
 SPACE: Arm/disarm the drone<br/>
 R: Enable AI tracking
