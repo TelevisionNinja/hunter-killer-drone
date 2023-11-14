@@ -119,13 +119,22 @@ class ImageSubscriber(Node):
                 point_1_x = int(x1 / img_width_x * len(self.current_depth_image[0]))
                 point_2_y = int(y2 / img_height_y * len(self.current_depth_image))
                 point_2_x = int(x2 / img_width_x * len(self.current_depth_image[0]))
-                depth = numpy.median(self.current_depth_image[point_1_y:point_2_y, point_1_x:point_2_x]) # meters
+                depth_box = self.current_depth_image[point_1_y:point_2_y, point_1_x:point_2_x]
+                depth = min(numpy.median(depth_box), numpy.mean(depth_box)) # meters
                 delta_height = -length_y * pixel_size * depth / effective_focal_length # meters
 
                 #----------------------------------------------------
 
-                twist.linear.z = float(delta_height)
-                twist.angular.z = theta_x
+                # max depth reading: ~18
+                factor = depth / 18 # normalize
+                factor *= 3 # expand range to 3
+                factor += 1 # shift
+
+                horizontal_velocity = 14.343 # m/s
+                vertical_velocity = delta_height * horizontal_velocity / depth # m/s
+
+                twist.linear.z = float(vertical_velocity) * factor
+                twist.angular.z = theta_x * factor
 
                 #----------------------------------------------------
 
