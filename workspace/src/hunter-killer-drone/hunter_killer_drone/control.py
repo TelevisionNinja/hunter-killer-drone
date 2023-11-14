@@ -17,17 +17,17 @@ else:
 
 
 commands = """
-W: Pitch Forward
-S: Pitch Backward
+W: Pitch Up
+S: Pitch Down
 A: Yaw Left
 D: Yaw Right
 Q: Up
 E: Down
 
-Up Arrow: Pitch Forward
-Down Arrow: Pitch Backward
-Left Arrow: Roll Left
-Right Arrow: Roll Right
+Up Arrow: Move Forward
+Down Arrow: Move Backward
+Left Arrow: Move Left
+Right Arrow: Move Right
 
 SPACE: Arm/disarm the drone
 R: Enable AI tracking
