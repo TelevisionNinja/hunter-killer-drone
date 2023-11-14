@@ -14,7 +14,7 @@ Dependencies
 ![depth](./images/depth_frame.png)
 ### Camera
 ![detect](./images/detected_frame.png)
-### RViz Path Visualizaiton
+### RViz Path Visualization
 ![rviz](./images/rviz.png)
 ### AI Tracking and Drone Control
 https://github.com/TelevisionNinja/hunter-killer-drone/assets/41529985/9603c2c8-03e6-4fad-9373-9c04c8ed0ef4
