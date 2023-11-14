@@ -236,7 +236,7 @@ class OffboardControl(Node):
 
         # A conversion for angular z is done in the attitude_callback function(it's the '-' in front of self.trueYaw)
         self.yaw = msg.angular.z
-        self.pitch = msg.angular.x
+        self.pitch = -msg.angular.x
 
     # receives current trajectory values from drone and grabs the yaw value of the orientation
     def attitude_callback(self, msg):
