@@ -270,7 +270,7 @@ class OffboardControl(Node):
             # NED -> FLU Transformation
             yaw = -msg.angular.z
             # pitch = msg.angular.x
-            delta_height = msg.linear.z
+            z_velocity = msg.linear.z
 
             timestamp = int(Clock().now().nanoseconds / 1000)
 
@@ -299,7 +299,7 @@ class OffboardControl(Node):
             # NED local world frame
             trajectory_msg.velocity[0] = velocity_world_x # in meters/second
             trajectory_msg.velocity[1] = velocity_world_y # in meters/second
-            trajectory_msg.velocity[2] = self.velocity.z + delta_height # in meters/second
+            trajectory_msg.velocity[2] = z_velocity # in meters/second
             trajectory_msg.position[0] = float('nan') # in meters
             trajectory_msg.position[1] = float('nan') # in meters
             trajectory_msg.position[2] = float('nan') # in meters
