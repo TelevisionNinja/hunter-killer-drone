@@ -88,6 +88,11 @@ class OffboardControl(Node):
             "/fmu/in/vehicle_command",
             qos_profile
         )
+        self.info_publisher = self.create_publisher(
+            Twist,
+            '/info',
+            qos_profile
+        )
 
         # callback function for the arm timer
         # period is arbitrary, > ~2Hz
@@ -311,6 +316,15 @@ class OffboardControl(Node):
             trajectory_msg.yawspeed = yaw # angular velocity around NED frame z-axis in radians/second
 
             self.publisher_trajectory.publish(trajectory_msg)
+
+            twist = Twist()
+            twist.linear.x = velocity_world_x
+            twist.linear.y = velocity_world_y
+            twist.linear.z = z_velocity
+            twist.angular.x = self.truePitch
+            twist.angular.y = 0.0
+            twist.angular.z = self.trueYaw
+            self.info_publisher.publish(twist)
 
 
     # publishes offboard control modes and velocity as trajectory setpoints
