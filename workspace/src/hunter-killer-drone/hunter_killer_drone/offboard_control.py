@@ -112,6 +112,7 @@ class OffboardControl(Node):
         self.pitch = 0.0 # pitch value sent
         self.trueYaw = 0.0 # current yaw value of drone
         self.truePitch = 0.0 # current pitch value of drone
+        self.trueRoll = 0.0 # current roll value of drone
         self.offboardMode = False
         self.flightCheck = False
         self.myCnt = 0
@@ -259,7 +260,7 @@ class OffboardControl(Node):
         x_squared = x * x
 
         self.trueYaw = numpy.arctan2(2 * (z * w + x * y), 1 - 2 * (w * w + x_squared))
-        # self.trueRoll = numpy.arctan2(2 * (z * y + w * x), 1 - 2 * (x_squared + y * y))
+        self.trueRoll = numpy.arctan2(2 * (z * y + w * x), 1 - 2 * (x_squared + y * y))
         self.truePitch = numpy.arcsin(2 * (y * w - z * x))
 
         # NED -> FLU Transformation
@@ -322,7 +323,7 @@ class OffboardControl(Node):
             twist.linear.y = velocity_world_y
             twist.linear.z = z_velocity
             twist.angular.x = self.truePitch
-            twist.angular.y = 0.0
+            twist.angular.y = self.trueRoll
             twist.angular.z = self.trueYaw
             self.info_publisher.publish(twist)
 

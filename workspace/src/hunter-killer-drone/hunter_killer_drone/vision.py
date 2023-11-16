@@ -56,12 +56,14 @@ class ImageSubscriber(Node):
         self.velocity_x = 0
         self.velocity_y = 0
         self.pitch = 0
+        self.roll = 0
 
 
     def trajectory_info_callback(self, msg):
         self.velocity_x = abs(msg.linear.x) # in meters/second
         self.velocity_y = abs(msg.linear.y) # in meters/second
         self.pitch = msg.angular.x # rad
+        self.roll = msg.angular.y # rad
 
 
     def camera_callback(self, data):
@@ -124,8 +126,17 @@ class ImageSubscriber(Node):
                 width = 4208 # pixels
                 pixel_size = width * 1.12 / (1920 * 1000) # um to mm
 
-                theta_x = math.atan(length_x * pixel_size / effective_focal_length) # rad
-                theta_y = math.atan(length_y * pixel_size / effective_focal_length) # rad
+                #----------------------------------------------------
+
+                # account for roll
+                length_x_adjusted = length_x * math.cos(self.roll) + length_y * math.sin(self.roll) # pixels
+                length_y_adjusted = -length_x * math.sin(self.roll) + length_y * math.cos(self.roll) # pixels
+
+                #----------------------------------------------------
+
+                # calculate angles of yaw and pitch
+                theta_x = math.atan(length_x_adjusted * pixel_size / effective_focal_length) # rad
+                theta_y = math.atan(length_y_adjusted * pixel_size / effective_focal_length) # rad
 
                 #----------------------------------------------------
 
@@ -142,8 +153,8 @@ class ImageSubscriber(Node):
                 #----------------------------------------------------
 
                 # account for non zero pitch
-                new_theta_y = self.pitch + theta_y
-                delta_height_adjusted = -depth * math.sin(new_theta_y) # meters
+                theta_y_adjusted = self.pitch + theta_y
+                delta_height_adjusted = -depth * math.sin(theta_y_adjusted) # meters
 
                 #----------------------------------------------------
 
