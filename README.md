@@ -10,14 +10,15 @@ Dependencies
 - ros_gz
 
 ## Results
+### AI Tracking and Drone Control
+![gazebo_tracking_gif](./images/tracking_gazebo.gif) ![gazebo_targeting_gif](./images/targeting.gif)
+https://github.com/TelevisionNinja/hunter-killer-drone/assets/41529985/9603c2c8-03e6-4fad-9373-9c04c8ed0ef4
 ### Depth Camera
-![depth](./images/depth_frame.png)
+![depth](./images/depth_frame.png) ![depth_gif](./images/tracking_depth.gif)
 ### Camera
 ![detect](./images/detected_frame.png)
 ### RViz Path Visualization
-![rviz](./images/rviz.png)
-### AI Tracking and Drone Control
-https://github.com/TelevisionNinja/hunter-killer-drone/assets/41529985/9603c2c8-03e6-4fad-9373-9c04c8ed0ef4
+![rviz](./images/rviz.png) ![rviz_gif](./images/tracking_rviz.gif)
 
 ## Installation
 
