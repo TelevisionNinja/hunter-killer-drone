@@ -43,9 +43,25 @@ class ImageSubscriber(Node):
             qos_profile
         )
 
+        self.info_subscription = self.create_subscription(
+            geometry_msgs.msg.Twist,
+            '/info',
+            self.trajectory_info_callback,
+            qos_profile
+        )
+
         # convert between ROS and OpenCV images
         self.cvbridge = CvBridge()
         self.current_depth_image = None
+        self.velocity_x = 0
+        self.velocity_y = 0
+        self.pitch = 0
+
+
+    def trajectory_info_callback(self, msg):
+        self.velocity_x = abs(msg.linear.x) # in meters/second
+        self.velocity_y = abs(msg.linear.y) # in meters/second
+        self.pitch = msg.angular.x # rad
 
 
     def camera_callback(self, data):
@@ -93,7 +109,7 @@ class ImageSubscriber(Node):
                 y2 = bounding_box[3]
 
                 box_midpoint_x = (x2 + x1) / 2
-                box_midpoint_y = (y2 + y1) / 2
+                box_midpoint_y = (y2 + 3 * y1) / 4 # aim for chest
 
                 midpoint_offset_x = 0
                 midpoint_offset_y = img_height_y / 16
@@ -109,32 +125,52 @@ class ImageSubscriber(Node):
                 pixel_size = width * 1.12 / (1920 * 1000) # um to mm
 
                 theta_x = math.atan(length_x * pixel_size / effective_focal_length) # rad
-                # theta_y = math.atan(length_y * pixel_size / effective_focal_length) # rad
-                # twist.angular.x = theta_y
+                theta_y = math.atan(length_y * pixel_size / effective_focal_length) # rad
 
                 #----------------------------------------------------
 
-                # take the median depth value
+                # take the lowest depth value out of the mean, median, and midpoint
                 point_1_y = int(y1 / img_height_y * len(self.current_depth_image))
                 point_1_x = int(x1 / img_width_x * len(self.current_depth_image[0]))
                 point_2_y = int(y2 / img_height_y * len(self.current_depth_image))
                 point_2_x = int(x2 / img_width_x * len(self.current_depth_image[0]))
+                point_3_x = int(box_midpoint_x / img_width_x * len(self.current_depth_image[0]))
+                point_3_y = int(box_midpoint_y / img_height_y * len(self.current_depth_image))
                 depth_box = self.current_depth_image[point_1_y:point_2_y, point_1_x:point_2_x]
-                depth = min(numpy.median(depth_box), numpy.mean(depth_box)) # meters
-                delta_height = -length_y * pixel_size * depth / effective_focal_length # meters
+                depth = min(numpy.median(depth_box), numpy.mean(depth_box), self.current_depth_image[point_3_y][point_3_x]) # meters
+
+                #----------------------------------------------------
+
+                # account for non zero pitch
+                new_theta_y = self.pitch + theta_y
+                delta_height_adjusted = -depth * math.sin(new_theta_y) # meters
 
                 #----------------------------------------------------
 
                 # max depth reading: ~18
-                factor = depth / 18 # normalize
-                factor *= 3 # expand range to 3
-                factor += 1 # shift
+                height_factor_depth = depth / 18 # normalize
+                yaw_factor_depth = height_factor_depth
 
-                horizontal_velocity = 14.343 # m/s
-                vertical_velocity = delta_height * horizontal_velocity / depth # m/s
+                # expand range to 2
+                yaw_factor_depth *= 2
+                height_factor_depth *= 2
 
-                twist.linear.z = float(vertical_velocity) * factor
-                twist.angular.z = theta_x * factor
+                # shift the factor to make it a value in [1, 3]
+                shift_factor_value = 1
+                yaw_factor_depth += shift_factor_value
+                height_factor_depth += shift_factor_value
+
+                max_velocity = 14.343 # m/s
+                height_factor_velocity = self.velocity_y / max_velocity
+                height_factor_velocity = height_factor_velocity * height_factor_velocity # make it nonlinear (x^2)
+                height_factor_velocity = height_factor_velocity * 5 + shift_factor_value
+                yaw_factor_velocity = self.velocity_x * 5 / max_velocity + shift_factor_value
+
+                #----------------------------------------------------
+
+                twist.linear.z = float(delta_height_adjusted * height_factor_depth * height_factor_velocity)
+                twist.angular.z = theta_x * yaw_factor_depth * yaw_factor_velocity
+                # twist.angular.x = theta_y
 
                 #----------------------------------------------------
 
