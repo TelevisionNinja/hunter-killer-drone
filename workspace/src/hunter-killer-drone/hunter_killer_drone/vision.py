@@ -159,28 +159,33 @@ class ImageSubscriber(Node):
                 #----------------------------------------------------
 
                 # max depth reading: ~18
-                height_factor_depth = depth / 18 # normalize
+                height_factor_depth = 1 - depth / 18 # normalize and flip
                 yaw_factor_depth = height_factor_depth
 
-                # expand range to 2
-                yaw_factor_depth *= 2
-                height_factor_depth *= 2
+                # expand range to 1
+                max_range = 1
+                yaw_factor_depth *= max_range
+                height_factor_depth *= max_range
 
-                # shift the factor to make it a value in [1, 3]
-                shift_factor_value = 1
+                # shift the factor to make it a value in [1, 2]
+                shift_factor_value = 0.5
                 yaw_factor_depth += shift_factor_value
                 height_factor_depth += shift_factor_value
 
-                max_velocity = 14.343 # m/s
-                height_factor_velocity = self.velocity_y / max_velocity
+                max_velocity = 14 # m/s
+                max_range = 6
+                shift_factor_value = 1
+                combined_velocities = self.velocity_y + self.velocity_x
+                max_range /= 2
+                height_factor_velocity = combined_velocities / max_velocity
                 height_factor_velocity = height_factor_velocity * height_factor_velocity # make it nonlinear (x^2)
-                height_factor_velocity = height_factor_velocity * 5 + shift_factor_value
-                yaw_factor_velocity = self.velocity_x * 5 / max_velocity + shift_factor_value
+                height_factor_velocity = height_factor_velocity * max_range + shift_factor_value
+                yaw_factor_velocity = combined_velocities * max_range / max_velocity + shift_factor_value
 
                 #----------------------------------------------------
 
-                twist.linear.z = float(delta_height_adjusted * height_factor_depth * height_factor_velocity)
-                twist.angular.z = theta_x * yaw_factor_depth * yaw_factor_velocity
+                twist.linear.z = float(2 * delta_height_adjusted * height_factor_depth * height_factor_velocity)
+                twist.angular.z = 2 * theta_x * yaw_factor_depth * yaw_factor_velocity
                 # twist.angular.x = theta_y
 
                 #----------------------------------------------------
