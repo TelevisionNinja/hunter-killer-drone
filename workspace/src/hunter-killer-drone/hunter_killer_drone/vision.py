@@ -6,10 +6,87 @@ import cv2
 from ultralytics import YOLO
 import math
 import geometry_msgs.msg
+from std_msgs.msg import Bool
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 import numpy
+import time
 
 model = YOLO('yolov8m.pt')
+
+
+class PID():
+    def __init__(
+            self,
+            tau,
+            kp,
+            ki,
+            kd,
+            integrator_max,
+            integrator_min,
+            pid_max,
+            pid_min
+        ):
+        """
+        tau: derivative low pass filter time constant
+        """
+
+        self.previous_measurement = 0
+        self.previous_error = 0
+        self.previous_timestamp = 0
+        self.i = 0
+        self.d = 0
+        self.tau = tau
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.integrator_max = integrator_max
+        self.integrator_min = integrator_min
+        self.pid_max = pid_max
+        self.pid_min = pid_min
+
+
+    def update(self, error, timestamp, measurement):
+        """
+        discrete domain
+        bilinear transform / tustin's method
+        """
+
+        delta_t = timestamp - self.previous_timestamp
+
+        p = self.kp * error
+        i = self.i + self.ki * delta_t * (error + self.previous_error) / 2
+
+        if i > self.integrator_max:
+            i = self.integrator_max
+        elif i < self.integrator_min:
+            i = self.integrator_min
+
+        # derivative on measurement
+        # band limited differentiator
+        d = -(2 * self.kd * (measurement - self.previous_measurement) + (2 * self.tau - delta_t) * self.d) / (2 * self.tau + delta_t)
+
+        pid = p + i + d
+
+        if pid > self.pid_max:
+            pid = self.pid_max
+        elif pid < self.pid_min:
+            pid = self.pid_min
+
+        self.previous_error = error
+        self.previous_measurement = measurement
+        self.previous_timestamp = timestamp
+        self.i = i
+        self.d = d
+
+        return pid
+
+
+    def reset(self):
+        self.previous_measurement = 0
+        self.previous_error = 0
+        self.previous_timestamp = 0
+        self.i = 0
+        self.d = 0
 
 
 class ImageSubscriber(Node):
@@ -50,18 +127,30 @@ class ImageSubscriber(Node):
             qos_profile
         )
 
+        self.vision_bool_sub = self.create_subscription(
+            Bool,
+            '/vision_enabled',
+            self.vision_enable_callback,
+            qos_profile
+        )
+
         # convert between ROS and OpenCV images
         self.cvbridge = CvBridge()
         self.current_depth_image = None
-        self.velocity_x = 0
-        self.velocity_y = 0
         self.pitch = 0
         self.roll = 0
 
+        self.yaw_pid = PID(0.1, 3, 0.01, 0.1, 0.01, -0.01, math.pi, -math.pi)
+        self.pitch_pid = PID(0.1, 4, 0.05, 0.01, 0.05, -0.05, 15, -15)
+
+
+    def vision_enable_callback(self, msg):
+        if msg.data:
+            self.yaw_pid.reset()
+            self.pitch_pid.reset()
+
 
     def trajectory_info_callback(self, msg):
-        self.velocity_x = abs(msg.linear.x) # in meters/second
-        self.velocity_y = abs(msg.linear.y) # in meters/second
         self.pitch = msg.angular.x # rad
         self.roll = msg.angular.y # rad
 
@@ -80,6 +169,8 @@ class ImageSubscriber(Node):
         pixel_size: 1.12 um
         resolution: 13MP (4208x3120)
         """
+
+        timestamp = time.time()
 
         # Convert ROS Image message to OpenCV image
         current_frame = self.cvbridge.imgmsg_to_cv2(data, desired_encoding="bgr8")
@@ -158,34 +249,13 @@ class ImageSubscriber(Node):
 
                 #----------------------------------------------------
 
-                # max depth reading: ~18
-                height_factor_depth = 1 - depth / 18 # normalize and flip
-                yaw_factor_depth = height_factor_depth
-
-                # expand range to 1
-                max_range = 1
-                yaw_factor_depth *= max_range
-                height_factor_depth *= max_range
-
-                # shift the factor to make it a value in [1, 2]
-                shift_factor_value = 0.5
-                yaw_factor_depth += shift_factor_value
-                height_factor_depth += shift_factor_value
-
-                max_velocity = 14 # m/s
-                max_range = 6
-                shift_factor_value = 1
-                combined_velocities = self.velocity_y + self.velocity_x
-                max_range /= 2
-                height_factor_velocity = combined_velocities / max_velocity
-                height_factor_velocity = height_factor_velocity * height_factor_velocity # make it nonlinear (x^2)
-                height_factor_velocity = height_factor_velocity * max_range + shift_factor_value
-                yaw_factor_velocity = combined_velocities * max_range / max_velocity + shift_factor_value
+                yaw_control = self.yaw_pid.update(theta_x, timestamp, theta_x)
+                pitch_control = self.pitch_pid.update(delta_height_adjusted, timestamp, delta_height_adjusted)
 
                 #----------------------------------------------------
 
-                twist.linear.z = float(2 * delta_height_adjusted * height_factor_depth * height_factor_velocity)
-                twist.angular.z = 2 * theta_x * yaw_factor_depth * yaw_factor_velocity
+                twist.linear.z = float(pitch_control)
+                twist.angular.z = yaw_control
                 # twist.angular.x = theta_y
 
                 #----------------------------------------------------
@@ -221,6 +291,9 @@ class ImageSubscriber(Node):
             # Show Results
             cv2.imshow('Detected Frame', image)
             cv2.waitKey(1)
+        else:
+            self.yaw_pid.reset()
+            self.pitch_pid.reset()
 
         self.offboard_vision_publisher.publish(twist)
 
