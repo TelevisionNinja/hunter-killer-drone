@@ -11,7 +11,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 import numpy
 import time
 
-model = YOLO('yolov8m.pt')
+model = YOLO('yolov8n.pt') # use small models for faster detection bc of hardware limitations
 
 
 class PID():
