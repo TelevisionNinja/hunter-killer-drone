@@ -142,6 +142,7 @@ class ImageSubscriber(Node):
 
         self.yaw_pid = PID(0.1, 3, 0.01, 0.1, 0.01, -0.01, math.pi, -math.pi)
         self.pitch_pid = PID(0.1, 4, 0.05, 0.01, 0.05, -0.05, 15, -15)
+        self.isPredicting = False
 
 
     def vision_enable_callback(self, msg):
@@ -170,6 +171,11 @@ class ImageSubscriber(Node):
         resolution: 13MP (4208x3120)
         """
 
+        # wait to finish processing current frame
+        if self.isPredicting:
+            return
+        self.isPredicting = True
+
         timestamp = time.time()
 
         # Convert ROS Image message to OpenCV image
@@ -192,6 +198,16 @@ class ImageSubscriber(Node):
             image = results[0].plot()
 
             if len(results[0].boxes) > 0:
+                # camera and image information
+                effective_focal_length = 3.37 # mm
+                width = 4208 # pixels
+                resolution_width = 1920 # pixels
+                pixel_size = 1.12 # um
+                # width is used bc the height is cropped to get a 16:9 aspect ratio for the output image
+                pixel_size = width * pixel_size / (resolution_width * 1000) # um to mm
+
+                #----------------------------------------------------
+
                 # computer graphics coordinate grid (origin at the top left, positive y axis goes down)
                 img_height_y, img_width_x = results[0].orig_shape
                 bounding_box = results[0].boxes[0].xyxy[0]
@@ -212,10 +228,6 @@ class ImageSubscriber(Node):
 
                 length_x = img_midpoint_x - box_midpoint_x # pixels
                 length_y = img_midpoint_y - box_midpoint_y # pixels
-
-                effective_focal_length = 3.37 # mm
-                width = 4208 # pixels
-                pixel_size = width * 1.12 / (1920 * 1000) # um to mm
 
                 #----------------------------------------------------
 
@@ -249,17 +261,23 @@ class ImageSubscriber(Node):
 
                 #----------------------------------------------------
 
+                # use PID to control yaw and pitch
                 yaw_control = self.yaw_pid.update(theta_x, timestamp, theta_x)
                 pitch_control = self.pitch_pid.update(delta_height_adjusted, timestamp, delta_height_adjusted)
 
                 #----------------------------------------------------
 
+                # set yaw and pitch in the twist message
                 twist.linear.z = float(pitch_control)
                 twist.angular.z = yaw_control
-                # twist.angular.x = theta_y
+
+                # the pitch if able to be controlled like in fixed wing:
+                # pitch_control = self.pitch_pid.update(theta_y_adjusted, timestamp, theta_y_adjusted)
+                # twist.angular.x = pitch_control
 
                 #----------------------------------------------------
 
+                # draw visualization
                 thickness = 3
 
                 image = cv2.circle(
@@ -296,6 +314,7 @@ class ImageSubscriber(Node):
             self.pitch_pid.reset()
 
         self.offboard_vision_publisher.publish(twist)
+        self.isPredicting = False
 
 
     def depth_camera_callback(self, data):
@@ -336,14 +355,14 @@ class ImageSubscriber(Node):
         #----------------------------------------------------
 
         # resize
-        original_fov = 1.274
-        target_fov = 1.204
-        scale_factor = original_fov / target_fov * 0.975 # 97.5% of the ratio. 100% was a little too much
+        original_horizontal_fov = 1.274
+        target_horizontal_fov = 1.204
+        scale_factor = original_horizontal_fov / target_horizontal_fov * 0.975 # 97.5% of the ratio. 100% was a little too much
         depth_array = cv2.resize(depth_array, None, fx=scale_factor, fy=scale_factor)
 
         #----------------------------------------------------
 
-        # change aspect ratio by cutting image
+        # change aspect ratio by cutting the height of the image
         aspect_ratio_x = 16
         aspect_ratio_y = 9
         new_height = width * aspect_ratio_y / aspect_ratio_x
@@ -358,7 +377,7 @@ class ImageSubscriber(Node):
         #----------------------------------------------------
 
         # normalize for visualization
-        current_frame = (depth_array - min) * 255 / (max - min)
+        current_frame = (depth_array - min) * 255 / (max - min) # value range: [0, 255]
         current_frame = numpy.round(current_frame)
         current_frame = current_frame.astype(numpy.uint8)
 
