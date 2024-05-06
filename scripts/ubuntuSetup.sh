@@ -6,7 +6,7 @@ sudo apt install curl
 
 cd ~
 
-git clone https://github.com/PX4/PX4-Autopilot.git --recursive
+git clone -b stable https://github.com/PX4/PX4-Autopilot.git --recursive
 bash ./PX4-Autopilot/Tools/setup/ubuntu.sh
 cd PX4-Autopilot/
 make px4_sitl
@@ -32,8 +32,6 @@ sudo apt update
 sudo apt upgrade
 sudo apt install ros-humble-desktop
 sudo apt install ros-dev-tools
-
-pip install --user -U empy pyros-genmsg setuptools
 
 # Micro XRCE-DDS Agent
 
